@@ -1,0 +1,71 @@
+---
+# Пользователь и группа для запуска Superset
+superset_user: superset
+superset_group: superset
+superset_home: /opt/superset
+
+# Версия Python и параметры виртуального окружения
+superset_python_version: "3.11"
+superset_venv_path: "{{ superset_home }}/venv"
+
+# SECRET_KEY (сгенерируйте заранее: openssl rand -base64 42)
+superset_secret_key: "eLNZp2_swXAyTSk_eLNZp2_swXAyTSk"
+
+# Параметры подключения к метабазе (по умолчанию SQLite)
+superset_sqlalchemy_database_uri: "sqlite:///{{ superset_home }}/superset.db"
+
+# Порт, на котором будет слушать Gunicorn
+superset_port: 8088
+superset_worker_class: gthread
+superset_threads: 4
+superset_timeout: 120
+
+# Драйвер ClickHouse (устанавливается в виртуальное окружение)
+superset_clickhouse_driver: "clickhouse-connect"
+
+# Администратор по умолчанию
+superset_admin_username: admin
+superset_admin_firstname: Admin
+superset_admin_lastname: Admin
+superset_admin_email: admin@domain.ru
+superset_admin_password: "PASSWORD_WEB_UI_JCYqZjSdhAc_LF"
+
+
+# =========================================
+# LDAP / Active Directory
+# =========================================
+superset_ldap_enabled: false
+
+# Отладочные опции (для диагностики проблем с LDAP)
+superset_ldap_debug: false
+
+# Параметры подключения к серверу LDAP
+superset_ldap_server: "ldap://10.10.10.10"
+superset_ldap_use_tls: false
+superset_ldap_bind_user: "CN=service superset,OU=superset,OU=Services,DC=domain,DC=ru"
+superset_ldap_bind_password: "PASSWORD_AD_VgUopqdcH_kAF8T"
+superset_ldap_search: "DC=domain,DC=ru"
+
+# Поля пользователей в AD
+superset_ldap_uid_field: "sAMAccountName"
+superset_ldap_firstname_field: "givenName"
+superset_ldap_lastname_field: "sn"
+superset_ldap_email_field: "mail"
+superset_ldap_group_field: "memberOf"
+
+# Автоматическая регистрация пользователей
+superset_ldap_user_registration: true
+superset_ldap_user_registration_role: "Gamma"
+
+# Сопоставление групп AD с ролями Superset
+superset_ldap_roles_mapping:
+  "CN=superset-admins,OU=superset,OU=Services,DC=domain,DC=ru":
+    - "Admin"
+  "CN=superset-users,OU=superset,OU=Services,DC=domain,DC=ru":
+    - "Gamma"
+
+# Синхронизировать роли при каждом входе
+superset_ldap_roles_sync_at_login: true
+
+# Время жизни сессии (в секундах)
+superset_permanent_session_lifetime: 1800

@@ -1,0 +1,25 @@
+[Unit]
+Description=Apache Superset
+After=network.target
+
+[Service]
+Type=simple
+User={{ superset_user }}
+Group={{ superset_group }}
+WorkingDirectory={{ superset_home }}
+Environment="SUPERSET_CONFIG_PATH={{ superset_home }}/superset_config.py"
+Environment="FLASK_APP=superset"
+ExecStart={{ superset_venv_path }}/bin/gunicorn \
+    --workers 4 \
+    --worker-class {{ superset_worker_class }} \
+    --threads {{ superset_threads }} \
+    --timeout {{ superset_timeout }} \
+    --bind 0.0.0.0:{{ superset_port }} \
+    --limit-request-line 0 \
+    --limit-request-field_size 0 \
+    "superset.app:create_app()"
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

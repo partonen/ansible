@@ -1,0 +1,77 @@
+import os
+
+# =========================================
+# Основные настройки Superset
+# =========================================
+SECRET_KEY = "{{ superset_secret_key }}"
+
+# Метабаза
+SQLALCHEMY_DATABASE_URI = "{{ superset_sqlalchemy_database_uri }}"
+
+# Отключение Talisman (если работаете без HTTPS на данном этапе)
+TALISMAN_ENABLED = False
+
+# Настройки для корректной работы Gunicorn
+ENABLE_PROXY_FIX = True
+
+# Лимиты
+ROW_LIMIT = 5000
+SUPERSET_WEBSERVER_TIMEOUT = {{ superset_timeout }}
+
+# Feature flags
+FEATURE_FLAGS = {
+    "DASHBOARD_NATIVE_FILTERS": True,
+    "DASHBOARD_CROSS_FILTERS": True,
+}
+
+# =========================================
+# LDAP / Active Directory
+# =========================================
+{% if superset_ldap_enabled %}
+import ldap
+import logging
+from flask_appbuilder.security.manager import AUTH_LDAP
+
+# 🔹 Заглушки reCAPTCHA (обход бага Superset 6.0 при LDAP + регистрации)
+RECAPTCHA_PUBLIC_KEY = "dummy"
+RECAPTCHA_PRIVATE_KEY = "dummy"
+
+{% if superset_ldap_debug %}
+# 🔹 Включаем полный debug python-ldap
+ldap.set_option(ldap.OPT_DEBUG_LEVEL, 255)
+
+# 🔹 Включаем debug Flask-AppBuilder
+logging.getLogger("flask_appbuilder.security.manager").setLevel(logging.DEBUG)
+logging.getLogger("superset.security").setLevel(logging.DEBUG)
+{% endif %}
+
+# 🔹 LDAP авторизация
+AUTH_TYPE = AUTH_LDAP
+AUTH_LDAP_SERVER = "{{ superset_ldap_server }}"
+AUTH_LDAP_USE_TLS = {{ superset_ldap_use_tls }}
+AUTH_LDAP_BIND_USER = "{{ superset_ldap_bind_user }}"
+AUTH_LDAP_BIND_PASSWORD = "{{ superset_ldap_bind_password }}"
+AUTH_LDAP_SEARCH = "{{ superset_ldap_search }}"
+
+# 🔹 Поля пользователей
+AUTH_LDAP_UID_FIELD = "{{ superset_ldap_uid_field }}"
+AUTH_LDAP_FIRSTNAME_FIELD = "{{ superset_ldap_firstname_field }}"
+AUTH_LDAP_LASTNAME_FIELD = "{{ superset_ldap_lastname_field }}"
+AUTH_LDAP_EMAIL_FIELD = "{{ superset_ldap_email_field }}"
+
+# 🔹 Регистрация новых пользователей
+AUTH_USER_REGISTRATION = {{ superset_ldap_user_registration }}
+AUTH_USER_REGISTRATION_ROLE = "{{ superset_ldap_user_registration_role }}"
+
+# 🔹 Роли по группам LDAP
+AUTH_LDAP_GROUP_FIELD = "{{ superset_ldap_group_field }}"
+AUTH_ROLES_MAPPING = {
+{% for group, roles in superset_ldap_roles_mapping.items() %}
+    "{{ group }}": {{ roles | to_json }},
+{% endfor %}
+}
+AUTH_ROLES_SYNC_AT_LOGIN = {{ superset_ldap_roles_sync_at_login }}
+
+# 🔹 Сессия
+PERMANENT_SESSION_LIFETIME = {{ superset_permanent_session_lifetime }}
+{% endif %}

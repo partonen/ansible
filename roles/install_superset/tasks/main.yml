@@ -1,0 +1,173 @@
+---
+- name: Установка системных зависимостей
+  ansible.builtin.apt:
+    name:
+      - acl   
+      - build-essential
+      - libssl-dev
+      - libffi-dev
+      - python{{ superset_python_version }}
+      - python{{ superset_python_version }}-dev
+      - python{{ superset_python_version }}-venv
+      - libsasl2-dev
+      - libldap2-dev
+      - default-libmysqlclient-dev
+      - pkg-config
+    state: present
+    update_cache: true
+
+- name: Создание группы
+  ansible.builtin.group:
+    name: "{{ superset_group }}"
+    system: true
+    state: present
+
+- name: Создание пользователя
+  ansible.builtin.user:
+    name: "{{ superset_user }}"
+    group: "{{ superset_group }}"
+    system: true
+    create_home: true
+    home: "{{ superset_home }}"
+    shell: /bin/bash
+
+- name: Создание директорий
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ superset_user }}"
+    group: "{{ superset_group }}"
+    mode: "0755"
+  loop:
+    - "{{ superset_home }}"
+    - "{{ superset_home }}/logs"
+
+- name: Создание виртуального окружения Python
+  ansible.builtin.command:
+    cmd: "python{{ superset_python_version }} -m venv {{ superset_venv_path }}"
+    creates: "{{ superset_venv_path }}/bin/activate"
+  become_user: "{{ superset_user }}"
+
+- name: Обновление pip, setuptools и wheel
+  ansible.builtin.pip:
+    name:
+      - pip
+      - setuptools
+      - wheel
+    state: latest
+    virtualenv: "{{ superset_venv_path }}"
+  become_user: "{{ superset_user }}"
+
+- name: Установка совместимой версии flask-caching
+  ansible.builtin.pip:
+    name: "flask-caching==2.3.0"
+    state: present
+    virtualenv: "{{ superset_venv_path }}"
+  become_user: "{{ superset_user }}"
+
+- name: Установка Apache Superset
+  ansible.builtin.pip:
+    name: apache-superset
+    state: present
+    virtualenv: "{{ superset_venv_path }}"
+  become_user: "{{ superset_user }}"
+
+- name: Установка библиотеки cachetools (зависимость Superset)
+  ansible.builtin.pip:
+    name: cachetools
+    state: present
+    virtualenv: "{{ superset_venv_path }}"
+  become_user: "{{ superset_user }}"
+
+- name: Установка библиотеки rich (зависимость CLI Superset)
+  ansible.builtin.pip:
+    name: rich
+    state: present
+    virtualenv: "{{ superset_venv_path }}"
+  become_user: "{{ superset_user }}"
+
+- name: Установка python-ldap (для аутентификации через AD)
+  ansible.builtin.pip:
+    name: python-ldap
+    state: present
+    virtualenv: "{{ superset_venv_path }}"
+  become_user: "{{ superset_user }}"
+  when: superset_ldap_enabled
+
+- name: Установка драйвера PostgreSQL
+  ansible.builtin.pip:
+    name: psycopg2-binary
+    state: present
+    virtualenv: "{{ superset_venv_path }}"
+  become_user: "{{ superset_user }}"
+
+- name: Установка драйвера ClickHouse
+  ansible.builtin.pip:
+    name: "{{ superset_clickhouse_driver }}"
+    state: present
+    virtualenv: "{{ superset_venv_path }}"
+  become_user: "{{ superset_user }}"
+
+- name: Установка драйвера Trino
+  ansible.builtin.pip:
+    name: sqlalchemy-trino
+    state: present
+    virtualenv: "{{ superset_venv_path }}"
+  become_user: "{{ superset_user }}"
+
+- name: Развертывание конфигурационного файла Superset
+  ansible.builtin.template:
+    src: superset_config.py.j2
+    dest: "{{ superset_home }}/superset_config.py"
+    owner: "{{ superset_user }}"
+    group: "{{ superset_group }}"
+    mode: "0644"
+
+- name: Инициализация базы данных Superset
+  ansible.builtin.command:
+    cmd: "{{ superset_venv_path }}/bin/superset db upgrade"
+    chdir: "{{ superset_home }}"
+  environment:
+    SUPERSET_CONFIG_PATH: "{{ superset_home }}/superset_config.py"
+  become_user: "{{ superset_user }}"
+  changed_when: true
+
+- name: Создание администратора
+  ansible.builtin.command:
+    cmd: >
+      {{ superset_venv_path }}/bin/superset fab create-admin
+      --username {{ superset_admin_username }}
+      --firstname {{ superset_admin_firstname }}
+      --lastname {{ superset_admin_lastname }}
+      --email {{ superset_admin_email }}
+      --password {{ superset_admin_password }}
+    chdir: "{{ superset_home }}"
+  environment:
+    SUPERSET_CONFIG_PATH: "{{ superset_home }}/superset_config.py"
+  become_user: "{{ superset_user }}"
+  register: superset_admin_result
+  failed_when: false
+  changed_when: superset_admin_result.rc == 0
+
+- name: Создание ролей и разрешений по умолчанию
+  ansible.builtin.command:
+    cmd: "{{ superset_venv_path }}/bin/superset init"
+    chdir: "{{ superset_home }}"
+  environment:
+    SUPERSET_CONFIG_PATH: "{{ superset_home }}/superset_config.py"
+  become_user: "{{ superset_user }}"
+  changed_when: true
+
+- name: Установка systemd-юнита
+  ansible.builtin.template:
+    src: superset.service.j2
+    dest: /etc/systemd/system/superset.service
+    mode: "0644"
+  notify: reload systemd
+
+- name: Включение и запуск сервиса Superset
+  ansible.builtin.systemd:
+    name: superset
+    state: started
+    enabled: true
+    daemon_reload: true
